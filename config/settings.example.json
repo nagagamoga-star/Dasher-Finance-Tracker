@@ -1,0 +1,16 @@
+{
+    "current_fuel_litres": 45.0,
+    "last_odo_reading": 0.0,
+    "last_fuel_price": 1.90,
+    "vehicle": {
+        "model": "Your Vehicle",
+        "tank_capacity": 45.0,
+        "fuel_consumption_l_100km": 7.2
+    },
+    "financials": {
+        "tax_buffer_pct": 0.10,
+        "ato_km_rate": 0.88,
+        "currency": "AUD"
+    },
+    "daily_target": 150.0
+}

@@ -1,0 +1,18 @@
+# Private local data — do not commit
+data/raw/*.csv
+!data/raw/.gitkeep
+!data/raw/dummy_dasher_log.csv
+data/backups/
+config/settings.json
+config/last_fuel.txt
+
+# Python / tooling
+__pycache__/
+*.pyc
+.venv/
+.env
+logs/
+*.log
+project_audit.txt
+.pytest_cache/
+.ruff_cache/
