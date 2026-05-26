@@ -1,7 +1,36 @@
 [project]
-name = "biodash"
-version = "3.3.0"
+name = "dasher-finance-tracker"
+version = "3.3.1"
+description = "Local-first Streamlit and CLI app for delivery drivers: gross vs net pay, fuel, odometer, and Australia ATO km estimates."
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.10"
+keywords = [
+    "delivery-driver",
+    "dasher",
+    "gig-economy",
+    "finance-tracker",
+    "streamlit",
+    "pandas",
+    "australia",
+    "ato",
+    "net-profit",
+    "fuel-log",
+    "odometer",
+    "food-delivery",
+    "courier",
+    "earnings-tracker",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: End Users/Desktop",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Office/Business :: Financial",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
