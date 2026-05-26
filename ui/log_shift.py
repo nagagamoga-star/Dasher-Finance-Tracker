@@ -71,7 +71,7 @@ def render_log_shift(settings: dict) -> None:
         dist = max(0.0, end_odo - last_odo) if end_odo >= last_odo else 0.0
         preview = compute_shift(settings, gross, dist, hours)
 
-        st.markdown("#### Preview")
+        st.markdown("**Preview**")
         st.caption(span)
         p1, p2, p3 = st.columns(3)
         p1.metric("Gross / hr", f"${preview['hourly_gross']:.2f}")

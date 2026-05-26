@@ -51,8 +51,9 @@ def render_settings(settings: dict) -> None:
         )
 
         st.caption("Live values (odo / fuel) update when you log shifts or refuel.")
-        st.text(f"Odometer: {settings.get('last_odo_reading', 0):,.0f} km")
-        st.text(f"Fuel in tank: {settings.get('current_fuel_litres', 0):.1f} L")
+        live1, live2 = st.columns(2)
+        live1.metric("Odometer", f"{settings.get('last_odo_reading', 0):,.0f} km")
+        live2.metric("Fuel in tank", f"{settings.get('current_fuel_litres', 0):.1f} L")
 
         if st.form_submit_button("Save settings", type="primary"):
             try:

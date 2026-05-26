@@ -42,12 +42,14 @@ stats = cached_weekly_stats(shifts_file_mtime())
 
 render_sidebar_status(settings, stats)
 
+st.title("BioDash AU")
+st.caption(f"Delivery driver analytics · v{__version__}")
+
 tab_dash, tab_log, tab_refuel, tab_settings = st.tabs(
     ["Dashboard", "Log shift", "Refuel", "Settings"]
 )
 
 with tab_dash:
-    st.title("BioDash AU Analytics")
     if df.empty:
         st.warning(
             f"No shift data in `{UNIFIED_LOG_PATH.name}`. "
