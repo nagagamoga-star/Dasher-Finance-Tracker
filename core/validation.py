@@ -42,6 +42,7 @@ def validate_shift_inputs(
     energy_state: str,
     energy_states: list[str],
     allow_odo_decrease: bool = False,
+    start_odo: float | None = None,
 ) -> tuple[str, str]:
     start = parse_time(start_time)
     end = parse_time(end_time)
@@ -52,10 +53,17 @@ def validate_shift_inputs(
         raise ValidationError("Shift hours must be greater than zero. Check start/end times.")
     if end_odo < 0:
         raise ValidationError("Odometer cannot be negative.")
-    if end_odo < last_odo and not allow_odo_decrease:
+    if start_odo is not None:
+        if start_odo < 0:
+            raise ValidationError("Start odometer cannot be negative.")
+        if end_odo < start_odo:
+            raise ValidationError(
+                f"End odometer ({end_odo:.0f}) is below start ({start_odo:.0f}) for this shift."
+            )
+    elif end_odo < last_odo and not allow_odo_decrease:
         raise ValidationError(
             f"End odometer ({end_odo:.0f}) is below last reading ({last_odo:.0f}). "
-            "Tick 'Odometer reset' if intentional."
+            "Use start odometer for backfill, or tick 'Odometer reset' if intentional."
         )
     if energy_state not in energy_states:
         raise ValidationError(f"Energy state must be one of: {', '.join(energy_states)}")

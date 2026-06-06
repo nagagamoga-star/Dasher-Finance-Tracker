@@ -5,7 +5,15 @@ from datetime import date, datetime, time, timedelta
 
 import streamlit as st
 
-from core.logic import ENERGY_STATES, append_shift, compute_shift
+from core.logic import (
+    ENERGY_STATES,
+    append_shift,
+    compute_shift,
+    infer_shift_start_odo,
+    is_backfill_shift,
+    load_shifts_df,
+    resolve_shift_distance,
+)
 from core.shift_time import ends_on_later_day_default, format_shift_span, resolve_shift_span
 from core.validation import ValidationError
 from ui.cache import clear_caches
@@ -15,6 +23,7 @@ def render_log_shift(settings: dict) -> None:
     st.subheader("Log a new shift")
     st.caption("For shifts after midnight: set **start date** to when you began, then enable **ends on a later day**.")
     last_odo = float(settings.get("last_odo_reading", 0))
+    df = load_shifts_df()
 
     with st.form("log_shift_form"):
         shift_date = st.date_input("Start date", value=date.today())
@@ -41,16 +50,30 @@ def render_log_shift(settings: dict) -> None:
             )
 
         gross = st.number_input("Gross earnings (AUD)", min_value=0.0, step=0.01, format="%.2f")
+        start_dt_preview = datetime.combine(shift_date, datetime.min.time())
+        backfill = is_backfill_shift(df, start_dt_preview)
+        inferred_start = infer_shift_start_odo(df, settings, start_dt_preview)
+        if backfill:
+            st.caption("Backfilling an earlier day — set start and end odometer for this shift.")
         end_odo = st.number_input(
-            f"End odometer (last: {last_odo:.0f} km)",
+            f"End odometer (last saved: {last_odo:.0f} km)",
             min_value=0.0,
             value=last_odo,
             step=0.1,
         )
+        use_start_odo = backfill or end_odo < last_odo
+        start_odo_val: float | None = None
+        if use_start_odo:
+            start_odo_val = st.number_input(
+                "Start odometer (km)",
+                min_value=0.0,
+                value=inferred_start,
+                step=0.1,
+            )
         energy = st.selectbox("Energy state", ENERGY_STATES, index=1)
-        allow_odo_reset = st.checkbox("Odometer reset (allow lower reading)")
+        allow_odo_reset = st.checkbox("Odometer reset (allow lower reading without start odo)")
         confirm_long = st.checkbox("Confirm shift over 500 km")
-        submitted = st.form_submit_button("Preview & save", type="primary")
+        submitted = st.form_submit_button("Save shift", type="primary")
 
     if not submitted:
         return
@@ -68,10 +91,11 @@ def render_log_shift(settings: dict) -> None:
             ends_next_day=ends_flag if ends_later else None,
         )
         span = format_shift_span(shift_str, start_str, end_str_date, end_str)
-        dist = max(0.0, end_odo - last_odo) if end_odo >= last_odo else 0.0
+        start_odo = start_odo_val if use_start_odo else None
+        dist = resolve_shift_distance(end_odo, settings_last_odo=last_odo, start_odo=start_odo)
         preview = compute_shift(settings, gross, dist, hours)
 
-        st.markdown("**Preview**")
+        st.markdown("**Summary**")
         st.caption(span)
         p1, p2, p3 = st.columns(3)
         p1.metric("Gross / hr", f"${preview['hourly_gross']:.2f}")
@@ -95,6 +119,7 @@ def render_log_shift(settings: dict) -> None:
             end_odo=end_odo,
             energy_state=energy,
             allow_odo_decrease=allow_odo_reset,
+            start_odo=start_odo,
             end_date=end_dt if ends_later else None,
             ends_next_day=ends_flag if ends_later else None,
         )

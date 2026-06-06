@@ -8,14 +8,23 @@ from core.paths import CONFIG_EXAMPLE_PATH, CONFIG_PATH, UNIFIED_LOG_PATH
 from core.version import __version__
 from ui.cache import cached_settings, cached_shifts, cached_weekly_stats, clear_caches, shifts_file_mtime
 from ui.dashboard import render_dashboard
+from ui.live_context import render_sidebar_live
 from ui.log_shift import render_log_shift
 from ui.refuel import render_refuel
 from ui.settings_tab import render_settings
 from ui.sidebar import render_sidebar_status
+from ui.styles import inject_mobile_styles
 
 setup_logging()
 
-st.set_page_config(page_title=f"BioDash AU | v{__version__}", layout="wide", page_icon="🚀")
+st.set_page_config(
+    page_title=f"BioDash | v{__version__}",
+    layout="wide",
+    page_icon="🚀",
+    initial_sidebar_state="expanded",
+)
+
+inject_mobile_styles()
 
 
 def _missing_config_screen() -> None:
@@ -40,10 +49,8 @@ except FileNotFoundError:
 df = cached_shifts()
 stats = cached_weekly_stats(shifts_file_mtime())
 
+render_sidebar_live(settings)
 render_sidebar_status(settings, stats)
-
-st.title("BioDash AU")
-st.caption(f"Delivery driver analytics · v{__version__}")
 
 tab_dash, tab_log, tab_refuel, tab_settings = st.tabs(
     ["Dashboard", "Log shift", "Refuel", "Settings"]

@@ -3,6 +3,6 @@ revision = 3
 requires-python = ">=3.10"
 
 [[package]]
-name = "biodash"
-version = "3.3.0"
+name = "dasher-finance-tracker"
+version = "3.3.1"
 source = { virtual = "." }

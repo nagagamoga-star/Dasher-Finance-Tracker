@@ -8,6 +8,7 @@ import streamlit as st
 from core.logic import save_settings, settings_from_form
 from core.paths import CONFIG_EXAMPLE_PATH, CONFIG_PATH
 from core.validation import ValidationError
+from core.weather import DEFAULT_CITY, DEFAULT_TIMEZONE, geocode_city, location_from_settings
 from ui.cache import clear_caches
 
 
@@ -15,6 +16,34 @@ def render_settings(settings: dict) -> None:
     st.subheader("Settings")
     vehicle = settings["vehicle"]
     financials = settings["financials"]
+    loc = location_from_settings(settings)
+
+    if "geo_lookup" in st.session_state:
+        hit = st.session_state.pop("geo_lookup")
+        loc = {**loc, **hit}
+
+    with st.expander("Location (weather & local time)", expanded=False):
+        st.caption("Used for the live clock and weather widgets on the dashboard.")
+        geo_col1, geo_col2 = st.columns([3, 1])
+        with geo_col1:
+            city_input = st.text_input("City", value=loc["city"], key="settings_city")
+        with geo_col2:
+            st.write("")
+            st.write("")
+            if st.button("Look up", use_container_width=True):
+                hit = geocode_city(city_input)
+                if hit:
+                    st.session_state["geo_lookup"] = hit
+                    st.rerun()
+                else:
+                    st.warning("City not found — try another name or enter coordinates below.")
+
+        loc_col1, loc_col2 = st.columns(2)
+        with loc_col1:
+            lat_input = st.number_input("Latitude", value=float(loc["latitude"]), format="%.4f", step=0.0001)
+        with loc_col2:
+            lon_input = st.number_input("Longitude", value=float(loc["longitude"]), format="%.4f", step=0.0001)
+        tz_input = st.text_input("Timezone", value=loc["timezone"], help="e.g. Australia/Brisbane")
 
     with st.form("settings_form"):
         model = st.text_input("Vehicle", value=vehicle.get("model", ""))
@@ -66,6 +95,12 @@ def render_settings(settings: dict) -> None:
                     daily_target=target,
                     current=settings,
                 )
+                updated["location"] = {
+                    "city": city_input.strip() or DEFAULT_CITY,
+                    "latitude": float(lat_input),
+                    "longitude": float(lon_input),
+                    "timezone": tz_input.strip() or DEFAULT_TIMEZONE,
+                }
                 save_settings(updated)
                 clear_caches()
                 st.success("Settings saved.")

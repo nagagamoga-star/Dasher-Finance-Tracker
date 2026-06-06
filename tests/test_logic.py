@@ -6,7 +6,10 @@ from datetime import datetime
 
 from core.logic import (
     compute_shift,
+    infer_shift_start_odo,
+    is_backfill_shift,
     repair_csv_shield,
+    resolve_shift_distance,
     shift_hours,
     weekly_stats,
 )
@@ -81,6 +84,44 @@ def test_validate_shift_rejects_odo_backwards():
             energy_states=["Flow"],
             allow_odo_decrease=False,
         )
+
+
+def test_validate_shift_allows_backfill_with_start_odo():
+    start, end = validate_shift_inputs(
+        gross=50,
+        end_odo=120,
+        last_odo=500,
+        start_time="09:00",
+        end_time="12:00",
+        hours=3,
+        energy_state="Flow",
+        energy_states=["Flow"],
+        start_odo=100,
+    )
+    assert start == "09:00"
+    assert end == "12:00"
+
+
+def test_resolve_shift_distance_with_start_odo():
+    assert resolve_shift_distance(120, settings_last_odo=500, start_odo=100) == 20.0
+
+
+def test_infer_shift_start_odo_subtracts_later_km():
+    df = pd.DataFrame(
+        {
+            "Shift_Date": pd.to_datetime(["15/05/2026", "20/05/2026"], dayfirst=True),
+            "Total_KM": [50.0, 30.0],
+        }
+    )
+    settings = {"last_odo_reading": 1000.0}
+    start = infer_shift_start_odo(df, settings, datetime(2026, 5, 15))
+    assert start == 920.0
+
+
+def test_is_backfill_shift():
+    df = pd.DataFrame({"Shift_Date": pd.to_datetime(["20/05/2026"], dayfirst=True)})
+    assert is_backfill_shift(df, datetime(2026, 5, 15)) is True
+    assert is_backfill_shift(df, datetime(2026, 5, 20)) is False
 
 
 def test_validate_refill():

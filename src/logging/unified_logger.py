@@ -25,9 +25,12 @@ from core.logic import (  # noqa: E402
     daily_target,
     fuel_level_pct,
     gross_for_date,
+    infer_shift_start_odo,
+    is_backfill_shift,
     km_left_on_fuel,
     load_settings,
     load_shifts_df,
+    resolve_shift_distance,
     weekly_stats,
 )
 from core.shift_time import ends_on_later_day_default, format_shift_span, resolve_shift_span  # noqa: E402
@@ -110,20 +113,38 @@ def log_shift():
         print(f"   → Span: {span_label} ({hours}h)")
 
         last_odo = float(s.get("last_odo_reading", 0.0))
+        backfill = is_backfill_shift(df, start_date)
+        inferred_start = infer_shift_start_odo(df, s, start_date)
+
         print(f"\n📍 Odometer (last saved: {last_odo:.0f} km)")
+        if backfill:
+            print("   ℹ️  Backfilling an earlier day — enter start and end odometer for this shift.")
+
+        start_odo: float | None = None
         while True:
             end_odo = _prompt_required_float("End odometer (km)")
-            dist = max(0.0, end_odo - last_odo) if end_odo >= last_odo else 0.0
+            needs_start = backfill or end_odo < last_odo
+            if needs_start:
+                start_odo = _prompt_required_float(
+                    "Start odometer (km)",
+                    allow_empty=True,
+                    default=inferred_start,
+                )
+            dist = resolve_shift_distance(
+                end_odo,
+                settings_last_odo=last_odo,
+                start_odo=start_odo if needs_start else None,
+            )
             print(f"   → Distance this shift: {dist:.1f} km")
             if dist > 500 and input(f"   ⚠️ {dist:.0f} km is a long shift. Confirm? (y/n): ").lower() != "y":
                 continue
             break
 
         allow_reset = False
-        if end_odo < last_odo:
+        if end_odo < last_odo and start_odo is None:
             allow_reset = input("   Odometer went backwards — save anyway? (y/n): ").lower() == "y"
             if not allow_reset:
-                print("   Cancelled — update odometer and try again.")
+                print("   Cancelled — enter start odometer for backfill or update reading.")
                 return
 
         gross = _prompt_required_float("Gross earnings ($)", allow_empty=True, default=0.0)
@@ -154,24 +175,24 @@ def log_shift():
         if nudge:
             print(f"\n   {nudge}")
 
-        if input("\nSave this shift? (y/n): ").lower() == "y":
-            append_shift(
-                s,
-                shift_date=start_date,
-                start_time=start_t,
-                end_time=end_t,
-                gross=gross,
-                end_odo=end_odo,
-                energy_state=energy,
-                allow_odo_decrease=allow_reset,
-                end_date=end_date,
-                ends_next_day=ends_next_day,
-            )
-            print("\n✅ Shift saved!")
-            _print_quest_lines(daily_target_status(day_gross, target, added=gross))
-            if nudge:
-                print(f"   {nudge}")
-            time.sleep(2)
+        append_shift(
+            s,
+            shift_date=start_date,
+            start_time=start_t,
+            end_time=end_t,
+            gross=gross,
+            end_odo=end_odo,
+            energy_state=energy,
+            allow_odo_decrease=allow_reset,
+            start_odo=start_odo,
+            end_date=end_date,
+            ends_next_day=ends_next_day,
+        )
+        print("\n✅ Shift saved!")
+        _print_quest_lines(daily_target_status(day_gross, target, added=gross))
+        if nudge:
+            print(f"   {nudge}")
+        time.sleep(2)
     except (ValidationError, ValueError) as e:
         print(f"❌ Error: {e}")
         time.sleep(2)

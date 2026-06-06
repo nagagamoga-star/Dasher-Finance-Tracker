@@ -53,6 +53,12 @@ DEFAULT_SETTINGS: dict[str, Any] = {
         "currency": "AUD",
     },
     "daily_target": 150.0,
+    "location": {
+        "city": "Townsville",
+        "latitude": -19.2569,
+        "longitude": 146.8239,
+        "timezone": "Australia/Brisbane",
+    },
 }
 
 ENERGY_STATES = ["Flow", "Neutral", "Stuck", "Drained"]
@@ -187,6 +193,48 @@ def gross_for_date(df: pd.DataFrame, day: datetime) -> float:
     return float(df.loc[mask, "Gross"].sum())
 
 
+def is_backfill_shift(df: pd.DataFrame, shift_date: datetime) -> bool:
+    """True when logging a shift earlier than the newest shift already on file."""
+    if df.empty or "Shift_Date" not in df.columns:
+        return False
+    day = pd.Timestamp(shift_date).normalize()
+    latest = df["Shift_Date"].max()
+    if pd.isna(latest):
+        return False
+    return day < pd.Timestamp(latest).normalize()
+
+
+def infer_shift_start_odo(df: pd.DataFrame, settings: dict[str, Any], shift_date: datetime) -> float:
+    """
+    Estimate odometer at shift start when backfilling out-of-order days.
+
+    Uses the saved reading minus km from this day and all later shifts.
+    """
+    last = float(settings.get("last_odo_reading", 0))
+    if df.empty or "Shift_Date" not in df.columns:
+        return last
+    day = pd.Timestamp(shift_date).normalize()
+    after = df[df["Shift_Date"].dt.normalize() > day]
+    same_day = df[df["Shift_Date"].dt.normalize() == day]
+    km_after = float(after["Total_KM"].sum()) if not after.empty else 0.0
+    km_same = float(same_day["Total_KM"].sum()) if not same_day.empty else 0.0
+    return max(0.0, last - km_after - km_same)
+
+
+def resolve_shift_distance(
+    end_odo: float,
+    *,
+    settings_last_odo: float,
+    start_odo: float | None = None,
+) -> float:
+    """Km for this shift from explicit start odo or the latest saved reading."""
+    if start_odo is not None:
+        return max(0.0, end_odo - start_odo)
+    if end_odo >= settings_last_odo:
+        return end_odo - settings_last_odo
+    return 0.0
+
+
 def weekly_stats(df: pd.DataFrame | None = None, days: int = 7) -> dict[str, Any]:
     empty = {
         "today_gross": 0.0,
@@ -283,6 +331,7 @@ def append_shift(
     end_odo: float,
     energy_state: str,
     allow_odo_decrease: bool = False,
+    start_odo: float | None = None,
     end_date: datetime | None = None,
     ends_next_day: bool | None = None,
 ) -> dict[str, Any]:
@@ -300,9 +349,12 @@ def append_shift(
         energy_state=energy_state,
         energy_states=ENERGY_STATES,
         allow_odo_decrease=allow_odo_decrease,
+        start_odo=start_odo,
     )
 
-    dist_km = max(0.0, end_odo - last_odo) if end_odo >= last_odo else 0.0
+    dist_km = resolve_shift_distance(end_odo, settings_last_odo=last_odo, start_odo=start_odo)
+    df_before = load_shifts_df()
+    backfill = is_backfill_shift(df_before, shift_date) or start_odo is not None
     calc = compute_shift(settings, gross, dist_km, hours)
     now = datetime.now()
 
@@ -325,10 +377,13 @@ def append_shift(
 
     atomic_append_csv_row(UNIFIED_LOG_PATH, row, SHIFT_COLUMNS, BACKUPS_DIR)
 
-    settings["last_odo_reading"] = end_odo
-    settings["current_fuel_litres"] = max(
-        0.0, float(settings.get("current_fuel_litres", 0)) - calc["fuel_used"]
-    )
+    if end_odo > last_odo:
+        settings["last_odo_reading"] = end_odo
+
+    if not backfill:
+        settings["current_fuel_litres"] = max(
+            0.0, float(settings.get("current_fuel_litres", 0)) - calc["fuel_used"]
+        )
     save_settings(settings)
     span = format_shift_span(shift_date_str, start_time, end_date_str, end_time)
     logger.info("Shift saved: %s (%.2fh) gross=$%.2f net=$%.2f", span, hours, gross, calc["net"])
